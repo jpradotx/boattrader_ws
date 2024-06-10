@@ -1,11 +1,6 @@
-import httpx
 import pymongo.errors
 from selectolax.parser import HTMLParser
-import math
-import time
 from datetime import datetime, date
-import pandas as pd
-import hashlib
 import logging
 import re
 from pymongo import MongoClient
