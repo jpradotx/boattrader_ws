@@ -8,19 +8,27 @@ import logging
 from pymongo import MongoClient
 import os
 
-# dowloader log file
+# downloader log file
 log_file = Path.cwd().parent / "logs" / Path("boattrader_downloader.log")
 logging.basicConfig(filename=log_file,
                     filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
 
 SITE_URL = "https://www.boattrader.com"
-# Save in local variables the filter_name and the filter_url to use
+# Save in local variables the Enviroment Variables for: filter_name, filter_url and mongo_host
 ENV_VAR_FILTER_NAME = "WSCRAP_FILTER_NAME"
 WSCRAP_FILTER_NAME = os.getenv(ENV_VAR_FILTER_NAME, "SeaRay_240_sing-out_2014_2019")
 
 ENV_VAR_FILTER_URL = "WSCRAP_FILTER_URL"
 WSCRAP_FILTER_URL = os.getenv(ENV_VAR_FILTER_URL, "/boats/make-sea-ray/engine-single+outboard/year-2014,2019/keyword-240/")
 
+ENV_VAR_MONGO_HOST = "WSCRAP_MONGO_HOST"
+MONGO_HOST = os.getenv(ENV_VAR_MONGO_HOST, "localhost")
+
+MONGO_DB_NAME = "BoatTrader"
+HTML_FILE_QUEUE_COLLECTION = "file_queue"
+BOAT_DATA_COLLECTION = "boats_data"
+# MONGO_HOST = "localhost"
+MONGO_PORT = 27017
 
 # Function that get url and page, and return the httpx.response.text object
 def get_html(baseurl, page):
@@ -162,13 +170,6 @@ def main():
         return
     logging.info("Mongo Collection: %s", queue_coll)
     insert_manifestlist_on_queue(queue_coll, manifest_list)
-
-
-MONGO_DB_NAME = "BoatTrader"
-HTML_FILE_QUEUE_COLLECTION = "file_queue"
-BOAT_DATA_COLLECTION = "boats_data"
-MONGO_HOST = "localhost"
-MONGO_PORT = 27017
 
 
 def initialize_mongodb():
