@@ -1,6 +1,8 @@
 import os
 from pymongo import MongoClient
 from pathlib import Path
+import logging
+
 
 ENV_VAR_FILTER_NAME = "WSCRAP_FILTER_NAME"
 WSCRAP_FILTER_NAME = os.getenv(ENV_VAR_FILTER_NAME, "SeaRay_240_sing-out_2014_2019")
@@ -32,6 +34,14 @@ def initialize_mongodb():
     return queue_coll
 
 
+def get_working_directory():
+    if Path.cwd() == Path("/app"):
+        directory = "/app/data"
+        return directory
+    else:
+        return Path.cwd().parent
+
+
 def main():
     # Test of enviroment variables
     print("Testing ENV VAR")
@@ -49,19 +59,23 @@ def main():
     print("mongo find_one result: ", find_result)
 
     # Test write to html files directory
-    root_path = Path("/app")
-    if Path.cwd() == root_path:
-        test_path = Path("data_html")
-        directory = "/app/data" / Path(test_path)
-        directory.mkdir(parents=True, exist_ok=True)
-        print("Print directory: ", directory)
-        content_test = "HERE A TEXT TO TRY IF WE ARE WRITING THE FILE SUCCESSFULLY!"
-        file_test = directory / Path("test_listparsed_.txt")
-        with file_test.open(mode="w", encoding="utf-8") as file:
-            file.write(content_test)
-        print("Print to file: ", file_test)
-    else:
-        print("We are in windows: ", Path.cwd())
+    directory = get_working_directory() / Path("data_html") / Path("test_folder")
+    directory.mkdir(parents=True, exist_ok=True)
+    print("Working directory is: ", directory)
+    content_test = "HERE A TEXT TO TRY IF WE ARE WRITING THE FILE SUCCESSFULLY!"
+    file_test = directory / Path("test_listparsed_.txt")
+    with file_test.open(mode="w", encoding="utf-8") as file:
+        file.write(content_test)
+    print("Print to file: ", file_test)
+
+    # Test LOG FILE
+    directory = get_working_directory() / Path("logs")
+    directory.mkdir(parents=True, exist_ok=True)
+    log_file = directory / Path("boattrader_downloader.log")
+    if not log_file.exists(): log_file.touch()
+    logging.basicConfig(filename=log_file,
+                        filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
+    logging.info("This is a test today")
 
 
 if __name__ == "__main__":

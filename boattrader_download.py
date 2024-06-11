@@ -8,10 +8,6 @@ import logging
 from pymongo import MongoClient
 import os
 
-# downloader log file
-log_file = Path.cwd().parent / "logs" / Path("boattrader_downloader.log")
-logging.basicConfig(filename=log_file,
-                    filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
 
 SITE_URL = "https://www.boattrader.com"
 # Save in local variables the Enviroment Variables for: filter_name, filter_url and mongo_host
@@ -137,12 +133,28 @@ def process_boat_list_page(baseurl, filterurl, page, directory):
     return href_next, manifest_list
 
 
+def get_working_directory():
+    if Path.cwd() == Path("/app"):
+        directory = "/app/data"
+        return directory
+    else:
+        return Path.cwd().parent
+
+
 def main():
+    # downloader log file setup
+    directory = get_working_directory() / Path("logs")
+    directory.mkdir(parents=True, exist_ok=True)
+    log_file = directory / Path("boattrader_downloader.log")
+    if not log_file.exists(): log_file.touch()
+    logging.basicConfig(filename=log_file,
+                        filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
+
     # Get the filter to use and the name
     baseurl = SITE_URL + WSCRAP_FILTER_URL
     filter_name = WSCRAP_FILTER_NAME
     # directory to save files is script path + data_html + filter_name
-    directory = Path.cwd().parent / "data_html" / Path(filter_name + "-" + current_date)
+    directory = get_working_directory() / Path("data_html") / Path(filter_name + "-" + current_date)
     # check if directory exist, if it does not: create it!
     directory.mkdir(parents=True, exist_ok=True)
     manifest_list = []
