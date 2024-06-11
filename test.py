@@ -1,5 +1,6 @@
 import os
 from pymongo import MongoClient
+from pathlib import Path
 
 ENV_VAR_FILTER_NAME = "WSCRAP_FILTER_NAME"
 WSCRAP_FILTER_NAME = os.getenv(ENV_VAR_FILTER_NAME, "SeaRay_240_sing-out_2014_2019")
@@ -22,7 +23,7 @@ def initialize_mongodb():
     try:
         db_client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, serverSelectionTimeoutMS=2000)
         db_client.server_info()
-    except ServerSelectionTimeoutError as err:
+    except Exception as err:
         print("Error initializing mongo, no connection !!! %s", err)
         return None
     print("DB client: %s", db_client)
@@ -36,6 +37,7 @@ def main():
     print("Testing ENV VAR")
     print("Value of WSCRAP_FILTER_NAME: ", WSCRAP_FILTER_NAME)
     print("Value of WSCRAP_FILTER_URL: ", WSCRAP_FILTER_URL)
+
     # Test mongodb connection
     print("Testing mongo")
     queue_coll = initialize_mongodb()
@@ -45,6 +47,21 @@ def main():
     print("Mongo Collection: %s", queue_coll)
     find_result = queue_coll.find_one()
     print("mongo find_one result: ", find_result)
+
+    # Test write to html files directory
+    root_path = Path("/app")
+    if Path.cwd() == root_path:
+        test_path = Path("data_html")
+        directory = "/app/data" / Path(test_path)
+        directory.mkdir(parents=True, exist_ok=True)
+        print("Print directory: ", directory)
+        content_test = "HERE A TEXT TO TRY IF WE ARE WRITING THE FILE SUCCESSFULLY!"
+        file_test = directory / Path("test_listparsed_.txt")
+        with file_test.open(mode="w", encoding="utf-8") as file:
+            file.write(content_test)
+        print("Print to file: ", file_test)
+    else:
+        print("We are in windows: ", Path.cwd())
 
 
 if __name__ == "__main__":

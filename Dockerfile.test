@@ -1,6 +1,6 @@
 FROM python:3.12.0
 WORKDIR /app
-COPY requirements.txt .
+COPY requirements_test.txt .
 RUN pip install --requirement requirements_test.txt
 COPY test.py .
 CMD python test.py

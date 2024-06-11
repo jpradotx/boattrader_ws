@@ -2,7 +2,7 @@ import httpx
 from selectolax.parser import HTMLParser
 from pathlib import Path
 import time
-from datetime import datetime, date
+from datetime import datetime
 import pandas as pd
 import logging
 from pymongo import MongoClient
@@ -21,6 +21,7 @@ WSCRAP_FILTER_NAME = os.getenv(ENV_VAR_FILTER_NAME, "SeaRay_240_sing-out_2014_20
 ENV_VAR_FILTER_URL = "WSCRAP_FILTER_URL"
 WSCRAP_FILTER_URL = os.getenv(ENV_VAR_FILTER_URL, "/boats/make-sea-ray/engine-single+outboard/year-2014,2019/keyword-240/")
 
+# If the enviroment variable for mongo host does not exist: use localhost (for run in pycharm console or windows)
 ENV_VAR_MONGO_HOST = "WSCRAP_MONGO_HOST"
 MONGO_HOST = os.getenv(ENV_VAR_MONGO_HOST, "localhost")
 
@@ -29,6 +30,7 @@ HTML_FILE_QUEUE_COLLECTION = "file_queue"
 BOAT_DATA_COLLECTION = "boats_data"
 # MONGO_HOST = "localhost"
 MONGO_PORT = 27017
+
 
 # Function that get url and page, and return the httpx.response.text object
 def get_html(baseurl, page):
@@ -176,9 +178,9 @@ def initialize_mongodb():
     try:
         db_client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, serverSelectionTimeoutMS=2000)
         db_client.server_info()
-    except pymongo.errors.ServerSelectionTimeoutError as err:
-        logging.info("Error initializing mongo, no connection !!! %s", err)
-        return None, None
+    except Exception as err:
+        print("Error initializing mongo, no connection !!! %s", err)
+        return None
     logging.info("DB client: %s", db_client)
     boats_db = db_client[MONGO_DB_NAME]
     queue_coll = boats_db[HTML_FILE_QUEUE_COLLECTION]
