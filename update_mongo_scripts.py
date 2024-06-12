@@ -159,8 +159,8 @@ def main_populate_enghours():
 def main_insert_filter_db():
     working_coll = initialize_mongodb(BOAT_FILTER_LIST_COLLECTION)
     print("Working collection on db: ", working_coll)
-    insert_dict = {'filter_number': '3', 'filter_name': 'test_disable',
-                   'filter_url': '/boats/test/disable/url/', 'filter_enable': 'TRUE'}
+    insert_dict = {'filter_number': 3, 'filter_name': 'test_disable',
+                   'filter_url': '/boats/test/disable/url/', 'filter_enable': True}
     working_coll.insert_one(insert_dict)
 
 
