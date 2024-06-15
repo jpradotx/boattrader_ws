@@ -2,6 +2,8 @@ import os
 from pymongo import MongoClient
 from pathlib import Path
 import logging
+import datetime
+from datetime import timezone
 
 
 WSCRAP_FILTER_NAME = os.getenv("WSCRAP_FILTER_NAME", "SeaRay_240_sing-out_2014_2019")
@@ -43,6 +45,11 @@ def get_working_directory():
 
 
 def main():
+    time_now = datetime.datetime.now(timezone.utc)
+    print("time: ", time_now)
+    return
+
+
     # Test of enviroment variables
     print("Testing ENV VAR")
     print("Value of WSCRAP_FILTER_NAME: ", WSCRAP_FILTER_NAME)

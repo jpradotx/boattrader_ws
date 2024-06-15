@@ -165,14 +165,8 @@ def main_html_file_path():
     print("Working collection on db: ", working_coll)
     result = working_coll.find_one({"_id": ObjectId('666d09c31ad182b7212465d8')})
     print("Result of find: ", result)
-    file_path = result["boat_file_html"].replace(os.altsep, os.sep)
-    file_path2 = Path(file_path)
-    print("File path is: ", file_path2)
-    directory = get_working_directory()
+    directory = Path(str(get_working_directory()) + result["boat_file_html"].replace(os.altsep, os.sep))
     print("working dir: ", directory)
-    directory2 = Path(str(directory) + file_path)
-    print("New file path: ", directory2)
-    # print("New file path with replace: ", directory, "--", file_path.replace(os.altsep, os.sep))
 
 
 if __name__ == "__main__":

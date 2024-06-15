@@ -2,7 +2,8 @@ import httpx
 from selectolax.parser import HTMLParser
 from pathlib import Path
 import time
-from datetime import datetime
+from datetime import timezone
+import datetime
 import pandas as pd
 import logging
 from pymongo import MongoClient
@@ -10,12 +11,8 @@ import os
 
 
 SITE_URL = "https://www.boattrader.com"
-# Save in local variables the Enviroment Variables for: filter_name, filter_url and mongo_host
-ENV_VAR_FILTER_NAME = "WSCRAP_FILTER_NAME"
-WSCRAP_FILTER_NAME = os.getenv(ENV_VAR_FILTER_NAME, "SeaRay_240_sing-out_2014_2019")
-
-ENV_VAR_FILTER_URL = "WSCRAP_FILTER_URL"
-WSCRAP_FILTER_URL = os.getenv(ENV_VAR_FILTER_URL, "/boats/make-sea-ray/engine-single+outboard/year-2014,2019/keyword-240/")
+# Save in local variables the Enviroment Variables filter_number to get filter
+WSCRAP_FILTER_NUMBER = os.getenv("WSCRAP_FILTER_NUMBER", 2)
 
 # If the enviroment variable for mongo host does not exist: use localhost (for run in pycharm console or windows)
 ENV_VAR_MONGO_HOST = "WSCRAP_MONGO_HOST"
@@ -24,6 +21,7 @@ MONGO_HOST = os.getenv(ENV_VAR_MONGO_HOST, "localhost")
 MONGO_DB_NAME = "BoatTrader"
 HTML_FILE_QUEUE_COLLECTION = "file_queue"
 BOAT_DATA_COLLECTION = "boats_data"
+BOAT_FILTER_LIST_COLLECTION = "filter_url_list"
 # MONGO_HOST = "localhost"
 MONGO_PORT = 27017
 
@@ -92,7 +90,7 @@ def parse_page_list(html):
     return item_list
 
 
-def process_boat_page(boat_list, directory, filterurl, page):
+def process_boat_page(boat_list, boat_file_html_location, filter_name, page, filter_url, directory):
     manifest_list = []
     boat_count = 0
     for boat in boat_list:
@@ -101,24 +99,25 @@ def process_boat_page(boat_list, directory, filterurl, page):
         boat_url = SITE_URL + boat_href
         logging.info("Boat href to download: %s", boat_url)
         boat_resp_txt = get_html(boat_url, 0)
-        boat_file_html = directory / Path(filterurl + "_boatparsed_" + str(page) + "_" + str(boat_count) + ".html")
-        with boat_file_html.open(mode="w", encoding="utf-8") as file:
+        boat_file_html = boat_file_html_location / Path(filter_name + "_boatparsed_" + str(page) + "_" + str(boat_count) + ".html")
+        boat_file_html_write = directory / Path(filter_name + "_boatparsed_" + str(page) + "_" + str(boat_count) + ".html")
+        with boat_file_html_write.open(mode="w", encoding="utf-8") as file:
             logging.info("Creating File: %s", boat_file_html)
             file.write(boat_resp_txt)
-        manifest_list.append({"filter_name": WSCRAP_FILTER_NAME,
-                              "filter_url": WSCRAP_FILTER_URL,
+        manifest_list.append({"filter_name": filter_name,
+                              "filter_url": filter_url,
                               "boat_file_html": str(boat_file_html), "boat_href": boat_href})
     return manifest_list
 
 
 # Get html of boat list and save it to a file
 # Get individual boats html and save each to a file
-def process_boat_list_page(baseurl, filterurl, page, directory):
+def process_boat_list_page(baseurl, filter_name, page, directory, filter_url, boat_file_html_location):
     logging.info("URL to download: %s", baseurl)
     response_txt = get_html(baseurl, 0)
     html_parsed = HTMLParser(response_txt)
     # file to save boat list is the directory passed + filtername with listparsed with page number + html extension
-    file_html = directory / Path(filterurl + "_listparsed_" + str(page) + ".html")
+    file_html = directory / Path(filter_name + "_listparsed_" + str(page) + ".html")
     with file_html.open(mode="w", encoding="utf-8") as file:
         logging.info("Creating File: %s", file_html)
         file.write(response_txt)
@@ -126,13 +125,37 @@ def process_boat_list_page(baseurl, filterurl, page, directory):
     boat_list = parse_page_list(html_parsed)
     logging.info("List of boat_list: %s", boat_list)
     # Proceed to download individual boat page html and save to file, returns manifest list
-    manifest_list = process_boat_page(boat_list, directory, filterurl, page)
+    manifest_list = process_boat_page(boat_list, boat_file_html_location, filter_name, page, filter_url, directory)
     # Get the next_page href to return, return None if no next page
     logging.info("Manifest_list file: %s", manifest_list)
     href_next = get_next_page(html_parsed)
     return href_next, manifest_list
 
 
+def initialize_mongodb(collection):
+    try:
+        db_client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, serverSelectionTimeoutMS=2000)
+        db_client.server_info()
+    except Exception as err:
+        print("Error initializing mongo, no connection !!! %s", err)
+        return None
+    logging.info("DB client: %s", db_client)
+    boats_db = db_client[MONGO_DB_NAME]
+    return_coll = boats_db[collection]
+    return return_coll
+
+
+# Function will insert the manifest list on queue collection in mongodb
+def insert_manifestlist_on_queue(queue_coll, manifest_list, filter_name):
+    date_dict = {"created_on_utc": datetime.datetime.now(timezone.utc)}
+    status_dict = {"status": "downloaded"}
+    for boat in manifest_list:
+        document = {**date_dict, "filter_name": filter_name, "site_url": SITE_URL, **boat, **status_dict}
+        logging.info("Inserting document: %s", document)
+        queue_coll.insert_one(document)
+
+
+# Function will return '/app/data' if running on container, will return parent directory if windows (D:\Python\boattrader_webscrapper)
 def get_working_directory():
     if Path.cwd() == Path("/app"):
         directory = "/app/data"
@@ -142,19 +165,47 @@ def get_working_directory():
 
 
 def main():
-    # downloader log file setup
+    # setup the log_file for the downloader. If directory does not exist, will be created.
     directory = get_working_directory() / Path("logs")
     directory.mkdir(parents=True, exist_ok=True)
     log_file = directory / Path("boattrader_downloader.log")
-    if not log_file.exists(): log_file.touch()
+    print("Log file to use:", log_file)
+    logging.info("Log file to use: %s", log_file)
+    if not log_file.exists():
+        log_file.touch()
     logging.basicConfig(filename=log_file,
                         filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
 
+    # Get boat filter data from env variable filter_number
+    #  - get the collection with the filter list from db
+    list_coll = initialize_mongodb(BOAT_FILTER_LIST_COLLECTION)
+    if list_coll is None:
+        logging.info("Not able to get queue collection object from mongo db!!")
+        return
+    print("Mongo Collection: %s", list_coll)
+    #  - get the document with the filter_number, only filter_enable = True
+    find_result = list_coll.find({"filter_number": int(WSCRAP_FILTER_NUMBER), "filter_enable": True})
+    filter_listdict = []
+    for doc in find_result:
+        filter_listdict.append(doc)
+    print("mongo find result by filter_number: ", filter_listdict)
+    logging.info("mongo find result by filter_number: %s", filter_listdict  )
+    #   - check if we have more than 1 filter with same filter_number and enabled. End the script if 2 or more found.
+    if len(filter_listdict) > 1:
+        print("EXIT THE CODE DUE TO MORE THAN 1 BOAT FILTER FOUND WITH FILTER_NUMBER: ", WSCRAP_FILTER_NUMBER)
+        logging.info("EXIT THE CODE DUE TO MORE THAN 1 BOAT FILTER FOUND WITH FILTER_NUMBER! %s", WSCRAP_FILTER_NUMBER)
+        return
+    # get the filter_url and the filter_name to process
+    filter_url = filter_listdict[0]["filter_url"]
+    filter_name = filter_listdict[0]["filter_name"]
+    print("Going to work on filter name ", filter_name, " and filter URL: ", filter_url)
+    logging.info("Going to work on filter name %s", filter_name)
+
     # Get the filter to use and the name
-    baseurl = SITE_URL + WSCRAP_FILTER_URL
-    filter_name = WSCRAP_FILTER_NAME
+    baseurl = SITE_URL + filter_url
     # directory to save files is script path + data_html + filter_name
     directory = get_working_directory() / Path("data_html") / Path(filter_name + "-" + current_date)
+    boat_file_html_location = Path("/data_html") / Path(filter_name + "-" + current_date)
     # check if directory exist, if it does not: create it!
     directory.mkdir(parents=True, exist_ok=True)
     manifest_list = []
@@ -162,7 +213,7 @@ def main():
     while baseurl is not None:
         # Download boatlist html, pass baseurl, filter, current page_count, directory to save files
         # returns the next page href
-        next_href, manifest_list_temp = process_boat_list_page(baseurl, filter_name, page_count, directory)
+        next_href, manifest_list_temp = process_boat_list_page(baseurl, filter_name, page_count, directory, filter_url, boat_file_html_location)
         manifest_list.extend(manifest_list_temp)
         # read_htmlfile_to_parse(directory, filter, page_count)
         page_count += 1
@@ -178,44 +229,22 @@ def main():
     df = pd.DataFrame(manifest_list)
     df.to_csv(manifest_csv_file, index=False)
 
-    queue_coll = initialize_mongodb()
+    queue_coll = initialize_mongodb(HTML_FILE_QUEUE_COLLECTION)
     if queue_coll is None:
         logging.info("Not able to get queue collection object from mongo db!!")
         return
     logging.info("Mongo Collection: %s", queue_coll)
-    insert_manifestlist_on_queue(queue_coll, manifest_list)
-
-
-def initialize_mongodb():
-    try:
-        db_client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, serverSelectionTimeoutMS=2000)
-        db_client.server_info()
-    except Exception as err:
-        print("Error initializing mongo, no connection !!! %s", err)
-        return None
-    logging.info("DB client: %s", db_client)
-    boats_db = db_client[MONGO_DB_NAME]
-    queue_coll = boats_db[HTML_FILE_QUEUE_COLLECTION]
-    return queue_coll
-
-
-def insert_manifestlist_on_queue(queue_coll, manifest_list):
-    date_dict = {"created_on_utc": datetime.utcnow()}
-    status_dict = {"status": "downloaded"}
-    for boat in manifest_list:
-        document = {**date_dict, "filter_name": WSCRAP_FILTER_NAME, "site_url": SITE_URL, **boat, **status_dict}
-        logging.info("Inserting document: %s", document)
-        queue_coll.insert_one(document)
+    insert_manifestlist_on_queue(queue_coll, manifest_list, filter_name)
 
 
 if __name__ == "__main__":
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.datetime.now(timezone.utc)
     current_date = current_datetime.strftime("%Y%m%d")
     print("Start of boatTrader webscrapper Downloader, date: ", current_datetime)
     logging.info("Start of boatTrader webscrapper Downloader, date: %s", current_datetime)
 
     main()
 
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.datetime.now(timezone.utc)
     print("END of boatTrader webscrapper Downloader, date: ", current_datetime)
     logging.info("END of boatTrader webscrapper Downloader, date: %s", current_datetime)

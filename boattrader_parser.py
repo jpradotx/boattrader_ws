@@ -1,18 +1,14 @@
-import pymongo.errors
 from selectolax.parser import HTMLParser
-from datetime import datetime, date
+from datetime import timezone
+import datetime
 import logging
 import re
 from pymongo import MongoClient
 from pathlib import Path
+import os
 
 
 SITE_URL = "https://www.boattrader.com"
-
-# dowloader log file
-log_file = Path.cwd().parent / "logs" / Path("boattrader_parser.log")
-logging.basicConfig(filename=log_file,
-                    filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
 
 
 def regex_get_digits(field):
@@ -90,18 +86,17 @@ HTML_FILE_QUEUE_COLLECTION = "file_queue"
 BOAT_DATA_COLLECTION = "boats_data"
 
 
-def initialize_mongodb():
+def initialize_mongodb(collection):
     try:
         db_client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, serverSelectionTimeoutMS=2000)
         db_client.server_info()
-    except pymongo.errors.ServerSelectionTimeoutError as err:
-        logging.info("Error initializing mongo, no connection !!! %s", err)
-        return None, None
-    logging.info("Mongo initialized with host: %s and port %s", MONGO_HOST, MONGO_PORT)
+    except Exception as err:
+        print("Error initializing mongo, no connection !!! %s", err)
+        return None
+    logging.info("DB client: %s", db_client)
     boats_db = db_client[MONGO_DB_NAME]
-    queue_coll = boats_db[HTML_FILE_QUEUE_COLLECTION]
-    boats_coll = boats_db[BOAT_DATA_COLLECTION]
-    return queue_coll, boats_coll
+    return_coll = boats_db[collection]
+    return return_coll
 
 
 def get_single_document_and_change_status_to_parsed(queue_coll):
@@ -119,22 +114,50 @@ def max_value(var1, var2):
     return max(values)
 
 
-def main():
-    queue_coll, boats_coll = initialize_mongodb()
-    # print("Mongo Collection queue: ", queue_coll)
-    # print("Mongo Collection boats: ", boats_coll)
+# Function will return '/app/data' if running on container, will return parent directory if windows (D:\Python\boattrader_webscrapper)
+def get_working_directory():
+    if Path.cwd() == Path("/app"):
+        directory = "/app/data"
+        return directory
+    else:
+        return Path.cwd().parent
 
+
+# Function that gets html file path from db, transform to current OS path format (windows, posix) and return full path to work on
+# returns a Path object
+def get_html_file_path(path_html_db):
+    return Path(str(get_working_directory()) + path_html_db.replace(os.altsep, os.sep))
+
+
+def main():
+    # parser log file setup
+    directory = get_working_directory() / Path("logs")
+    directory.mkdir(parents=True, exist_ok=True)
+    log_file = directory / Path("boattrader_parser.log")
+    print("Log file to use:", log_file)
+    logging.info("Log file to use: %s", log_file)
+    if not log_file.exists():
+        log_file.touch()
+    logging.basicConfig(filename=log_file,
+                        filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
+
+    queue_coll = initialize_mongodb(HTML_FILE_QUEUE_COLLECTION)
+    boats_coll = initialize_mongodb(BOAT_DATA_COLLECTION)
     if queue_coll is None:
         logging.info("Not able to get queue collection object from mongo db!!")
         return
     document = get_single_document_and_change_status_to_parsed(queue_coll)
+    print("1st document: ", document)
     if document is None:
+        print("No file found on queue downloaded and pending to parse!!")
         logging.info("No file found on queue downloaded and pending to parse!!")
         return
+    count = 1
     while document is not None:
+        count += 1
         boaturl_dict = {"boat_url": SITE_URL + document["boat_href"]}
         document.update(boaturl_dict)
-        boat_file_wpath = Path(document["boat_file_html"])
+        boat_file_wpath = get_html_file_path(document["boat_file_html"])
         with boat_file_wpath.open(mode="r", encoding="utf-8") as file:
             content = file.read()
         html_parsed = HTMLParser(content)
@@ -149,17 +172,20 @@ def main():
         response = insert_document_to_boats_collection(boats_coll, document)
         logging.info("Insert response: %s", response)
         document = get_single_document_and_change_status_to_parsed(queue_coll)
+    print("Count of documents processed: ", count)
+    logging.info("Count of documents processed: %s", count)
+    print("Finished inserting all current downloaded html files")
     logging.info("Finished inserting all current downloaded html files")
 
 
 if __name__ == "__main__":
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.datetime.now(timezone.utc)
     current_date = current_datetime.strftime("%Y%m%d")
     print("START of boatTrader webscrapper Parser, date: ", current_datetime)
     logging.info("START of boatTrader webscrapper Parser, date: %s", current_datetime)
 
     main()
 
-    current_datetime = datetime.utcnow()
+    current_datetime = datetime.datetime.now(timezone.utc)
     print("END of boatTrader webscrapper Parser, date: ", current_datetime)
     logging.info("END of boatTrader webscrapper Parser, date: %s", current_datetime)
