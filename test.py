@@ -73,7 +73,8 @@ def main():
     directory = get_working_directory() / Path("logs")
     directory.mkdir(parents=True, exist_ok=True)
     log_file = directory / Path("boattrader_downloader.log")
-    if not log_file.exists(): log_file.touch()
+    if not log_file.exists():
+        log_file.touch()
     logging.basicConfig(filename=log_file,
                         filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
     logging.info("This is a test today")
