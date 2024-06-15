@@ -49,7 +49,8 @@ def main():
     directory = get_working_directory() / Path("logs")
     directory.mkdir(parents=True, exist_ok=True)
     log_file = directory / Path("boattrader_filter_list_update.log")
-    if not log_file.exists(): log_file.touch()
+    if not log_file.exists():
+        log_file.touch()
     logging.basicConfig(filename=log_file,
                         filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
     # Test mongodb connection
@@ -84,6 +85,7 @@ def main():
     print("New filter to db: ", new_filter_list)
     logging.info("New filter to db: %s", new_filter_list)
 
+    # insert the non existing boat list into db
     for entry_dict in filter_csv_listdict:
         if entry_dict["filter_name"] not in current_filter_list:
             entry_dict["filter_number"] = int(entry_dict["filter_number"])
@@ -91,11 +93,12 @@ def main():
             insert_dict_in_db(filterlist_coll, entry_dict)
             print("Inserting to db: ", entry_dict)
             logging.info("Inserting to db: %s", entry_dict)
-    for filter in current_filter_list:
-        if filter not in new_filter_list:
-            disable_filter_in_db(filterlist_coll, filter)
-            print("Disable filter in db: ", filter)
-            logging.info("Disable filter in db: %s", entry_dict)
+    # disable the boat list filter not found on csv
+    for filtername in current_filter_list:
+        if filtername not in new_filter_list:
+            disable_filter_in_db(filterlist_coll, filtername)
+            print("Disable filter in db: ", filtername)
+            logging.info("Disable filter in db: %s", filtername)
 
 
 if __name__ == "__main__":
