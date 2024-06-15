@@ -1,6 +1,9 @@
 from datetime import datetime
 from pymongo import MongoClient
 import re
+from bson.objectid import ObjectId
+from pathlib import Path
+import os
 
 MONGO_DB_NAME = "BoatTrader"
 HTML_FILE_QUEUE_COLLECTION = "file_queue"
@@ -9,15 +12,16 @@ BOAT_FILTER_LIST_COLLECTION = "filter_url_list"
 MONGO_HOST = "localhost"
 MONGO_PORT = 27017
 
+
 def main_update_created_on():
     queue_coll = initialize_mongodb(HTML_FILE_QUEUE_COLLECTION)
     print(queue_coll)
     find_cursor = queue_coll.find_one({"created_on": {"$ne": None}})
     while find_cursor:
-        print("Cursor to update: ",find_cursor)
-        createdOn_string = find_cursor["created_on"] + ' 02'
-        print(createdOn_string)
-        datetime_object = datetime.strptime(createdOn_string, '%Y%m%d %H')
+        print("Cursor to update: ", find_cursor)
+        createdon_string = find_cursor["created_on"] + ' 02'
+        print(createdon_string)
+        datetime_object = datetime.strptime(createdon_string, '%Y%m%d %H')
         print(datetime_object)
         print(type(datetime_object))
         queue_coll.update_one({"_id": find_cursor["_id"]}, {"$set": {"created_on_utc": datetime_object}})
@@ -34,33 +38,28 @@ def main_rename_enghours():
     print(response)
 
 
-def main_create_max_eng_hrs():
-    working_coll = initialize_mongodb(BOAT_DATA_COLLECTION)
-    find_cursor = working_coll.find_one({"enghours": {"$ne": None}})
-    hrs_des = find_cursor[""]
-
-
 def main_delete_entries_per_date():
     working_coll = initialize_mongodb(BOAT_DATA_COLLECTION)
     print(working_coll)
     # today_date = date.today()
     today_date = datetime(2024, 5, 26)
     print(today_date)
-    find_cursor = working_coll.find({"created_on_utc": {"$gte": today_date }})
+    find_cursor = working_coll.find({"created_on_utc": {"$gte": today_date}})
     for document in find_cursor:
         print(document)
-    response = working_coll.delete_many({"created_on_utc": {"$gte": today_date }})
+    response = working_coll.delete_many({"created_on_utc": {"$gte": today_date}})
     print(response)
+
 
 def main_change_queue_to_downloaded():
     working_coll = initialize_mongodb(HTML_FILE_QUEUE_COLLECTION)
     print(working_coll)
     today_date = datetime(2024, 5, 26)
     print(today_date)
-    find_cursor = working_coll.find({"created_on_utc": {"$gte": today_date }})
+    find_cursor = working_coll.find({"created_on_utc": {"$gte": today_date}})
     for document in find_cursor:
         print(document)
-    response = working_coll.update_many({"created_on_utc": {"$gte": today_date }}, {"$set": {"status": "downloaded"}})
+    response = working_coll.update_many({"created_on_utc": {"$gte": today_date}}, {"$set": {"status": "downloaded"}})
     print(response)
 
 
@@ -76,21 +75,9 @@ def initialize_mongodb(collection):
     return working_coll
 
 
-def initialize_mongodb_both():
-    try:
-        db_client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, serverSelectionTimeoutMS=2000)
-        db_client.server_info()
-    except Exception as err:
-        print("Error initializing mongo, no connection !!! %s", err)
-        return None, None
-    boats_db = db_client[MONGO_DB_NAME]
-    queue_coll = boats_db[HTML_FILE_QUEUE_COLLECTION]
-    boats_coll = boats_db[BOAT_DATA_COLLECTION]
-    return queue_coll, boats_coll
-
-
 def main_change_listing_null_to_downloaded():
-    queue_coll, boats_coll = initialize_mongodb_both()
+    queue_coll = initialize_mongodb(HTML_FILE_QUEUE_COLLECTION)
+    boats_coll = initialize_mongodb(BOAT_DATA_COLLECTION)
     print(boats_coll)
     response_listnull_file = boats_coll.find_one({"listingPrice": None})
     counter = 1
@@ -118,6 +105,7 @@ def get_digits(string):
         return int(''.join(digits))
     else:
         return None
+
 
 def main_change_enghoursbox_toint():
     working_coll = initialize_mongodb(BOAT_DATA_COLLECTION)
@@ -150,7 +138,7 @@ def main_populate_enghours():
     while response_missing:
         print("Response missing: ", response_missing["_id"], " -- ", response_missing["enghours_box"], " -- ", response_missing["enghours_descrip"])
         max_value = max_or_none(response_missing["enghours_box"], response_missing["enghours_descrip"])
-        print("Max value: ", max_value )
+        print("Max value: ", max_value)
         response_update = working_coll.update_one({"_id": response_missing["_id"]}, {"$set": {"enghours": max_value}})
         print("Response update; ", response_update)
         response_missing = working_coll.find_one({"enghours": {"$exists": False}})
@@ -164,6 +152,28 @@ def main_insert_filter_db():
     working_coll.insert_one(insert_dict)
 
 
+def get_working_directory():
+    if Path.cwd() == Path("/app"):
+        directory = "/app/data"
+        return directory
+    else:
+        return Path.cwd().parent
+
+
+def main_html_file_path():
+    working_coll = initialize_mongodb(HTML_FILE_QUEUE_COLLECTION)
+    print("Working collection on db: ", working_coll)
+    result = working_coll.find_one({"_id": ObjectId('666d09c31ad182b7212465d8')})
+    print("Result of find: ", result)
+    file_path = result["boat_file_html"].replace(os.altsep, os.sep)
+    file_path2 = Path(file_path)
+    print("File path is: ", file_path2)
+    directory = get_working_directory()
+    print("working dir: ", directory)
+    directory2 = Path(str(directory) + file_path)
+    print("New file path: ", directory2)
+    # print("New file path with replace: ", directory, "--", file_path.replace(os.altsep, os.sep))
+
 
 if __name__ == "__main__":
     current_datetime = datetime.utcnow()
@@ -173,7 +183,8 @@ if __name__ == "__main__":
     # main_delete_entries_per_date()
     # main_change_listing_null_to_downloaded()
     # main_populate_enghours()
-    main_insert_filter_db()
+    # main_insert_filter_db()
+    main_html_file_path()
 
     current_datetime = datetime.utcnow()
     print("END of boatTrader UPDATE MONGO script, date: ", current_datetime)
