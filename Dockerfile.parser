@@ -1,0 +1,6 @@
+FROM python:3.12.0
+WORKDIR /app
+COPY requirements_parser.txt .
+RUN pip install --no-cache-dir --requirement requirements_parser.txt
+COPY boattrader_parser.py .
+CMD python boattrader_parser.py

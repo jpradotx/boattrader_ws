@@ -1,0 +1,6 @@
+FROM python:3.12.0
+WORKDIR /app
+COPY requirements_downloader.txt .
+RUN pip install --no-cache-dir --requirement requirements_downloader.txt
+COPY boattrader_download.py .
+CMD python boattrader_download.py

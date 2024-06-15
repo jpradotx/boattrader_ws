@@ -1,0 +1,5 @@
+pymongo
+pathlib
+httpx
+selectolax
+pandas
