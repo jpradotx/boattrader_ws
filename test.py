@@ -45,6 +45,18 @@ def get_working_directory():
 
 
 def main():
+    # parser log file setup
+    directory = get_working_directory() / Path("logs")
+    directory.mkdir(parents=True, exist_ok=True)
+    log_file = directory / Path("boattrader_parser.log")
+    print("Log file to use:", log_file)
+    if not log_file.exists():
+        log_file.touch()
+    logging.basicConfig(filename=log_file,
+                        filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
+    logging.info("this is a test now, see results")
+    return
+
     time_now = datetime.datetime.now(timezone.utc)
     print("time: ", time_now)
     return

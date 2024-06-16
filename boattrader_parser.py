@@ -150,7 +150,6 @@ def main():
     directory.mkdir(parents=True, exist_ok=True)
     log_file = directory / Path("boattrader_parser.log")
     print("Log file to use:", log_file)
-    logging.info("Log file to use: %s", log_file)
     if not log_file.exists():
         log_file.touch()
     logging.basicConfig(filename=log_file,
