@@ -49,6 +49,7 @@ def main():
     directory = get_working_directory() / Path("logs")
     directory.mkdir(parents=True, exist_ok=True)
     log_file = directory / Path("boattrader_filter_list_update.log")
+    print("Log file to use:", log_file)
     if not log_file.exists():
         log_file.touch()
     logging.basicConfig(filename=log_file,
