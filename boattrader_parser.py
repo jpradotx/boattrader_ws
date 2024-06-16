@@ -78,9 +78,12 @@ def parse_page_description_enghrs(html):
     data_dict = {'enghours_descrip': eng_hrs}
     return data_dict
 
+# If the enviroment variable for mongo host does not exist: use localhost (for run in pycharm console or windows)
+ENV_VAR_MONGO_HOST = "WSCRAP_MONGO_HOST"
+MONGO_HOST = os.getenv(ENV_VAR_MONGO_HOST, "localhost")
 
 MONGO_DB_NAME = "BoatTrader"
-MONGO_HOST = "localhost"
+# MONGO_HOST = "localhost"
 MONGO_PORT = 27017
 HTML_FILE_QUEUE_COLLECTION = "file_queue"
 BOAT_DATA_COLLECTION = "boats_data"
@@ -99,9 +102,13 @@ def initialize_mongodb(collection):
     return return_coll
 
 
-def get_single_document_and_change_status_to_parsed(queue_coll):
-    return queue_coll.find_one_and_update({"status": "downloaded"}, {"$set": {"status": "parsed"}}, {"_id": 0, "status": 0})
+def get_single_document(queue_coll):
+    return queue_coll.find_one({"status": "downloaded"})
 
+
+def change_status_to_parsed(queue_coll, document_id):
+    result_update = queue_coll.update_one({"_id": document_id}, {"$set": {"status": "parsed"}})
+    return result_update
 
 def insert_document_to_boats_collection(boats_coll, document):
     return boats_coll.insert_one(document)
@@ -126,7 +133,15 @@ def get_working_directory():
 # Function that gets html file path from db, transform to current OS path format (windows, posix) and return full path to work on
 # returns a Path object
 def get_html_file_path(path_html_db):
-    return Path(str(get_working_directory()) + path_html_db.replace(os.altsep, os.sep))
+    if os.altsep is None:
+        path_separator = "\\"
+    else:
+        path_separator = os.altsep
+    print("os.altsep :", os.altsep, "---os.sep: ", os.sep)
+    print("path_html_db --> : ", path_html_db)
+    path_html_db.replace(path_separator, os.sep)
+    print("path_html_db after replace: ", path_html_db)
+    return Path(str(get_working_directory()) + path_html_db)
 
 
 def main():
@@ -146,7 +161,7 @@ def main():
     if queue_coll is None:
         logging.info("Not able to get queue collection object from mongo db!!")
         return
-    document = get_single_document_and_change_status_to_parsed(queue_coll)
+    document = get_single_document(queue_coll)
     print("1st document: ", document)
     if document is None:
         print("No file found on queue downloaded and pending to parse!!")
@@ -157,7 +172,9 @@ def main():
         count += 1
         boaturl_dict = {"boat_url": SITE_URL + document["boat_href"]}
         document.update(boaturl_dict)
+        print("document -> boat_file_html: ", document["boat_file_html"])
         boat_file_wpath = get_html_file_path(document["boat_file_html"])
+        print("boat file full path: ", boat_file_wpath)
         with boat_file_wpath.open(mode="r", encoding="utf-8") as file:
             content = file.read()
         html_parsed = HTMLParser(content)
@@ -167,11 +184,13 @@ def main():
         document.update(enghrs_dict)
         # add enghours field using the max of enghours_box and enghours_descrip
         document["enghours"] = max_value(document["enghours_box"], document["enghours_descrip"])
-
         logging.info("Insert document: %s", document)
         response = insert_document_to_boats_collection(boats_coll, document)
         logging.info("Insert response: %s", response)
-        document = get_single_document_and_change_status_to_parsed(queue_coll)
+        result_update = change_status_to_parsed(queue_coll, document["_id"])
+        print("Result status update: ", result_update)
+        logging.info("Result status update: %s", result_update)
+        document = get_single_document(queue_coll)
     print("Count of documents processed: ", count)
     logging.info("Count of documents processed: %s", count)
     print("Finished inserting all current downloaded html files")
