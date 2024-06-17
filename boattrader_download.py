@@ -175,6 +175,11 @@ def main():
     logging.basicConfig(filename=log_file,
                         filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
 
+    # Check if WSCRAP_FILTER_NUMBER is an integer
+    if not isinstance(WSCRAP_FILTER_NUMBER, int):
+        print("Skipping downloader due to FILTER_NUMBER argument is not integer")
+        logging.info("Skipping downloader due to FILTER_NUMBER argument is not integer")
+        return
     # Get boat filter data from env variable filter_number
     #  - get the collection with the filter list from db
     list_coll = initialize_mongodb(BOAT_FILTER_LIST_COLLECTION)
