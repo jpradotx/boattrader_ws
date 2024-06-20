@@ -1,0 +1,1 @@
+docker container run --name parser --rm --mount type=bind,source="D:\Python\boattrader_webscrapper",target=/app/data --env WSCRAP_MONGO_HOST="host.docker.internal" boat_parser
