@@ -164,6 +164,26 @@ def get_working_directory():
         return Path.cwd().parent
 
 
+def string_to_int(input_string):
+    """
+    Converts a string to an integer if all characters are numeric, otherwise returns None.
+
+    Args:
+        input_string (str): The input string to be converted.
+
+    Returns:
+        int or None: If all characters in the input string are numeric, returns the integer value.
+                     If any non-numeric character is present, returns None.
+    """
+    try:
+        # Try to convert the string to an integer
+        integer_value = int(input_string)
+        return integer_value
+    except ValueError:
+        # If the string contains non-numeric characters, return None
+        return None
+
+
 def main():
     # setup the log_file for the downloader. If directory does not exist, will be created.
     directory = get_working_directory() / Path("logs")
@@ -176,10 +196,12 @@ def main():
                         filemode="a", format="%(asctime)s - %(levelname)s: - %(message)s", level=logging.INFO)
 
     # Check if WSCRAP_FILTER_NUMBER is an integer
-    if not isinstance(WSCRAP_FILTER_NUMBER, int):
-        print("Skipping downloader due to FILTER_NUMBER argument is not integer")
-        logging.info("Skipping downloader due to FILTER_NUMBER argument is not integer")
+    # WSCRAP_FILTER_NUMBER_int = int(WSCRAP_FILTER_NUMBER)
+    if string_to_int(WSCRAP_FILTER_NUMBER) is None:
+        print("Skipping downloader due to FILTER_NUMBER argument is not integer:",WSCRAP_FILTER_NUMBER,"-",type(WSCRAP_FILTER_NUMBER))
+        logging.info("Skipping downloader due to FILTER_NUMBER argument is not integer:",WSCRAP_FILTER_NUMBER)
         return
+    # WSCRAP_FILTER_NUMBER = WSCRAP_FILTER_NUMBER_int
     # Get boat filter data from env variable filter_number
     #  - get the collection with the filter list from db
     list_coll = initialize_mongodb(BOAT_FILTER_LIST_COLLECTION)
